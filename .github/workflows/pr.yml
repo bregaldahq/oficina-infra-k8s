@@ -75,6 +75,9 @@ jobs:
       - name: terraform plan
         id: plan
         run: |
+          # pipefail é obrigatório: sem ele o status do pipeline é o do `tee`,
+          # que sempre retorna 0, e um plan que falha passa como verde.
+          set -euo pipefail
           terraform plan -input=false -no-color -lock=false \
             -var-file=envs/${{ matrix.env }}.tfvars \
             -var="newrelic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
