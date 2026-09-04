@@ -19,5 +19,6 @@ resource "helm_release" "metrics_server" {
     }
   })]
 
-  depends_on = [module.eks]
+  # Ordered after the ALB controller: its webhook intercepts Service creation.
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
