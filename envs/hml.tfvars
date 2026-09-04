@@ -16,3 +16,4 @@ ecr_repository_name       = "oficina-api"
 ecr_image_retention_count = 10
 
 newrelic_enabled = true
+app_ci_role_arn  = "arn:aws:iam::474717634842:role/oficina-gha-oficina-mecanica-tech-challenge"

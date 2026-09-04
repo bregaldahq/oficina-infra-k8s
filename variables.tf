@@ -112,3 +112,15 @@ variable "chart_version_nri_bundle" {
   type    = string
   default = "5.0.83"
 }
+
+variable "app_ci_role_arn" {
+  description = <<-DESC
+    IAM role used by the application repository's pipeline, granted access to the
+    application namespaces inside the cluster.
+
+    Without this the app pipeline authenticates to AWS fine and is then rejected by the
+    Kubernetes API — EKS authorisation is separate from IAM.
+  DESC
+  type        = string
+  default     = ""
+}
