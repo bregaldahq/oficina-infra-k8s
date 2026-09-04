@@ -28,6 +28,10 @@ module "eks" {
       principal_arn = var.app_ci_role_arn
       type          = "STANDARD"
 
+      # Mapped to a Kubernetes group so custom RBAC can be bound to it below:
+      # the managed EKS policies cover core resources only, not CRDs.
+      kubernetes_groups = [local.app_deployer_group]
+
       policy_associations = {
         namespace_admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"

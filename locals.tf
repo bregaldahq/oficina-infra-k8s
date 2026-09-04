@@ -24,6 +24,9 @@ locals {
   }
   app_namespace = local.app_namespaces[var.environment]
 
+  # Kubernetes group carried by the application pipeline (see eks.tf access entry).
+  app_deployer_group = "oficina-app-deployers"
+
   eso_namespace       = "external-secrets"
   eso_service_account = "external-secrets"
 
