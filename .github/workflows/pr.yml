@@ -75,6 +75,9 @@ jobs:
       - name: terraform plan
         id: plan
         run: |
+          # pipefail é obrigatório: sem ele o status do pipeline é o do `tee`,
+          # que sempre retorna 0, e um plan que falha passa como verde.
+          set -euo pipefail
           terraform plan -input=false -no-color -lock=false \
             -var-file=envs/${{ matrix.env }}.tfvars \
             -var="newrelic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
@@ -85,9 +88,27 @@ jobs:
 
       - name: Comment plan on PR
         uses: actions/github-script@v7
+        env:
+          # O plan chega por env, nunca interpolado no script. A saída do Terraform
+          # contém crases e sequências ${ } que quebram o template literal do JS —
+          # e interpolar conteúdo não confiável dentro do script é injeção.
+          PLAN_SUMMARY: ${{ steps.plan.outputs.summary }}
+          PLAN_ENV: ${{ matrix.env }}
         with:
           script: |
-            const body = `### terraform plan — \`${{ matrix.env }}\`\n\n<details><summary>ver plan</summary>\n\n\`\`\`hcl\n${{ steps.plan.outputs.summary }}\n\`\`\`\n\n</details>`;
+            const plan = process.env.PLAN_SUMMARY || '(plan vazio)';
+            const env  = process.env.PLAN_ENV;
+            const body = [
+              '### terraform plan — `' + env + '`',
+              '',
+              '<details><summary>ver plan</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

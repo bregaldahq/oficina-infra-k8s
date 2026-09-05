@@ -42,5 +42,14 @@ resource "helm_release" "aws_load_balancer_controller" {
     }
   })]
 
+  # The controller registers a mutating webhook that intercepts EVERY Service in the
+  # cluster. Until its pods have endpoints, any chart creating a Service fails with
+  # "no endpoints available for service aws-load-balancer-webhook-service". wait=true
+  # makes Terraform hold here until the pods are ready, and the other add-ons depend
+  # on this release so they are never installed into that window.
+  wait          = true
+  wait_for_jobs = true
+  timeout       = 900
+
   depends_on = [module.eks]
 }

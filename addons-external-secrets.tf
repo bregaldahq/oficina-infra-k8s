@@ -75,7 +75,8 @@ resource "helm_release" "external_secrets" {
     certController = { create = true }
   })]
 
-  depends_on = [module.eks]
+  # Ordered after the ALB controller: its webhook intercepts Service creation.
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
 # Cluster-wide store: every ExternalSecret in oficina-<env> resolves against the
