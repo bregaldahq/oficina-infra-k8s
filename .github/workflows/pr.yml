@@ -63,7 +63,24 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Este stack LE a rede e os segredos do SSM publicados pelo repositorio
+      # oficina-infra-database. Num ambiente que nunca foi provisionado esses
+      # parametros nao existem e o plan falha por ausencia de dependencia, nao por
+      # defeito do codigo — um check vermelho permanente que ensina o time a
+      # ignorar check vermelho. Aqui a ausencia vira "skipped", explicita.
+      - name: O ambiente esta provisionado?
+        id: guard
+        run: |
+          set -uo pipefail
+          if aws ssm get-parameter --name "/oficina/${{ matrix.env }}/network/vpc_id" >/dev/null 2>&1; then
+            echo "provisionado=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "provisionado=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Ambiente ${{ matrix.env }} ainda nao provisionado (sem /oficina/${{ matrix.env }}/network/vpc_id no SSM). Plan pulado."
+          fi
+
       - name: terraform init
+        if: steps.guard.outputs.provisionado == 'true'
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -73,6 +90,7 @@ jobs:
             -backend-config="encrypt=true"
 
       - name: terraform plan
+        if: steps.guard.outputs.provisionado == 'true'
         id: plan
         run: |
           # pipefail é obrigatório: sem ele o status do pipeline é o do `tee`,
@@ -87,6 +105,7 @@ jobs:
           echo 'EOF' >> "$GITHUB_OUTPUT"
 
       - name: Comment plan on PR
+        if: steps.guard.outputs.provisionado == 'true'
         uses: actions/github-script@v7
         env:
           # O plan chega por env, nunca interpolado no script. A saída do Terraform
