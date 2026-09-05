@@ -92,13 +92,18 @@ jobs:
           kubectl top nodes || echo "metrics not warm yet"
 
       # ---- New Relic deployment marker ------------------------------------
+      # The entity GUID only exists after the cluster first reports to New Relic,
+      # so this step is non-blocking by design.
       - name: Mark deployment in New Relic
         if: success()
+        continue-on-error: true
         env:
           NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}
           NEW_RELIC_ACCOUNT_ID: ${{ secrets.NEW_RELIC_ACCOUNT_ID }}
+          ENTITY_GUID: ${{ secrets.NEW_RELIC_INFRA_ENTITY_GUID }}
         run: |
           [ -n "${NEW_RELIC_API_KEY:-}" ] || { echo "no NR key, skipping"; exit 0; }
+          [ -n "${ENTITY_GUID:-}" ]      || { echo "no entity guid yet, skipping"; exit 0; }
           curl -sS -X POST https://api.newrelic.com/graphql \
             -H "Api-Key: ${NEW_RELIC_API_KEY}" \
             -H 'Content-Type: application/json' \

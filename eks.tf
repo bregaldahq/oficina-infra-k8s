@@ -16,6 +16,34 @@ module "eks" {
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
+  # EKS authorisation is NOT IAM authorisation. The application's CI role can hold
+  # AdministratorAccess in IAM and still get "the server has asked for the client to
+  # provide credentials" from kubectl: the cluster only trusts principals that have an
+  # explicit access entry. Only the creator (this stack's role) gets one automatically.
+  #
+  # Scoped to the two application namespaces instead of the whole cluster: the app
+  # pipeline deploys workloads, it has no business touching kube-system.
+  access_entries = {
+    app_ci = {
+      principal_arn = var.app_ci_role_arn
+      type          = "STANDARD"
+
+      # Mapped to a Kubernetes group so custom RBAC can be bound to it below:
+      # the managed EKS policies cover core resources only, not CRDs.
+      kubernetes_groups = [local.app_deployer_group]
+
+      policy_associations = {
+        namespace_admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
+          access_scope = {
+            type       = "namespace"
+            namespaces = values(local.app_namespaces)
+          }
+        }
+      }
+    }
+  }
+
   cluster_addons = {
     coredns                = {}
     eks-pod-identity-agent = {}
