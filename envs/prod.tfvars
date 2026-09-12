@@ -25,7 +25,12 @@ node_max_size       = 4
 
 cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
 
-ecr_repository_name       = "oficina-api"
+# Nome distinto do de homologacao de proposito. Os dois ambientes tem states
+# separados, mas o ECR nao carregava o sufixo do ambiente: os dois planos
+# tentavam criar o mesmo `oficina-api`, o segundo falhava com
+# RepositoryAlreadyExistsException, e um `destroy` de producao levaria junto o
+# registro de imagens que homologacao usa.
+ecr_repository_name       = "oficina-api-prod"
 ecr_image_retention_count = 10
 
 newrelic_enabled = true
