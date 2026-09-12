@@ -1,6 +1,11 @@
-environment     = "prod"
-region          = "us-east-1"
-cluster_version = "1.30"
+environment = "prod"
+region      = "us-east-1"
+# 1.31, nao 1.30: a AWS faz upgrade automatico do control plane quando a versao
+# fixada se aproxima do fim de suporte. Deixar o valor antigo aqui faz o apply
+# tentar rebaixar, e a AWS recusa com "Cluster is not eligible for rollback" —
+# bloqueando qualquer mudanca de infraestrutura ate o pin ser atualizado.
+# Confira com: aws eks describe-cluster --name <cluster> --query cluster.version
+cluster_version = "1.31"
 
 # Graded delivery runs on ON_DEMAND so a spot reclaim cannot break the demo.
 capacity_type = "ON_DEMAND"
