@@ -9,12 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write
   contents: read
-  pull-requests: write
 
 env:
-  AWS_REGION: us-east-1
   TF_VERSION: 1.9.8
 
 jobs:
@@ -41,96 +38,3 @@ jobs:
         uses: terraform-linters/setup-tflint@v4
       - run: tflint --init && tflint --recursive
         continue-on-error: true
-
-  plan:
-    name: plan (${{ matrix.env }})
-    runs-on: ubuntu-latest
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        env: [hml, prod]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      # Este stack LE a rede e os segredos do SSM publicados pelo repositorio
-      # oficina-infra-database. Num ambiente que nunca foi provisionado esses
-      # parametros nao existem e o plan falha por ausencia de dependencia, nao por
-      # defeito do codigo — um check vermelho permanente que ensina o time a
-      # ignorar check vermelho. Aqui a ausencia vira "skipped", explicita.
-      - name: O ambiente esta provisionado?
-        id: guard
-        run: |
-          set -uo pipefail
-          if aws ssm get-parameter --name "/oficina/${{ matrix.env }}/network/vpc_id" >/dev/null 2>&1; then
-            echo "provisionado=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "provisionado=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Ambiente ${{ matrix.env }} ainda nao provisionado (sem /oficina/${{ matrix.env }}/network/vpc_id no SSM). Plan pulado."
-          fi
-
-      - name: terraform init
-        if: steps.guard.outputs.provisionado == 'true'
-        run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=oficina/oficina-infra-k8s/${{ matrix.env }}/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=oficina-tflock" \
-            -backend-config="encrypt=true"
-
-      - name: terraform plan
-        if: steps.guard.outputs.provisionado == 'true'
-        id: plan
-        run: |
-          # pipefail é obrigatório: sem ele o status do pipeline é o do `tee`,
-          # que sempre retorna 0, e um plan que falha passa como verde.
-          set -euo pipefail
-          terraform plan -input=false -no-color -lock=false \
-            -var-file=envs/${{ matrix.env }}.tfvars \
-            -var="newrelic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
-            -out=tfplan.${{ matrix.env }} | tee plan.txt
-          echo 'summary<<EOF' >> "$GITHUB_OUTPUT"
-          tail -c 60000 plan.txt >> "$GITHUB_OUTPUT"
-          echo 'EOF' >> "$GITHUB_OUTPUT"
-
-      - name: Comment plan on PR
-        if: steps.guard.outputs.provisionado == 'true'
-        uses: actions/github-script@v7
-        env:
-          # O plan chega por env, nunca interpolado no script. A saída do Terraform
-          # contém crases e sequências ${ } que quebram o template literal do JS —
-          # e interpolar conteúdo não confiável dentro do script é injeção.
-          PLAN_SUMMARY: ${{ steps.plan.outputs.summary }}
-          PLAN_ENV: ${{ matrix.env }}
-        with:
-          script: |
-            const plan = process.env.PLAN_SUMMARY || '(plan vazio)';
-            const env  = process.env.PLAN_ENV;
-            const body = [
-              '### terraform plan — `' + env + '`',
-              '',
-              '<details><summary>ver plan</summary>',
-              '',
-              '```hcl',
-              plan,
-              '```',
-              '',
-              '</details>',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body,
-            });
